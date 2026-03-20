@@ -11,6 +11,7 @@ using System.Collections.Generic;
 using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using TMPro;
 using UnityEngine;
 using UnityEngine;
 
@@ -119,6 +120,50 @@ namespace BitchlandGiveMuchMoneyBepInWx
             __result = 0;
             return false;
         }
+
+        public static bool RefreshDisplay()
+        {
+            if (!MagicCardNoCosts)
+            {
+                return true;
+            }
+
+            if (CardInteractions.interactableActionOptions == null)
+            {
+                return true;
+            }
+
+            if (CardInteractions.interactableOnInteractableActionOptions == null)
+            {
+                return true;
+            }
+
+            foreach (InteractableOption i in CardInteractions.interactableActionOptions)
+            {
+                i.powerCost = 0;
+                i.contributionCost = 0;
+                i.SuccessChance = (Func<InteractableObject, float>)((a) => 1000000f);
+            }
+
+            foreach (InteractableOnInteractableOption i in CardInteractions.interactableOnInteractableActionOptions)
+            {
+                i.powerCost = 0;
+                i.contributionCost = 0;
+                i.SuccessChance = (Func<InteractableObject, InteractableObject, float>)((a, b) => 1000000f);
+            }
+
+            return true;
+        }
+        public static bool ButtonPressed(UnityEngine.UI.Button pressedButton)
+        {
+            if (!MagicCardNoCosts)
+            {
+                return true;
+            }
+
+            RefreshDisplay();
+            return true;
+        }
         public static void PatchAllHarmonyMethods()
         {
             try
@@ -127,6 +172,8 @@ namespace BitchlandGiveMuchMoneyBepInWx
                 PatchHarmonyMethodUnity(typeof(GameState), "ConsumePlayerPower", "ConsumePlayerPower", false, true);
                 PatchHarmonyMethodUnity(typeof(GameState), "CalculatePlayerPowerGain", "CalculatePlayerPowerGain", false, true);
                 PatchHarmonyMethodUnity(typeof(CardInteractions), "MasterMagicCostMultiplier", "MasterMagicCostMultiplier", true, false);
+                PatchHarmonyMethodUnity(typeof(ActionSelection), "RefreshDisplay", "RefreshDisplay", true, false);
+                PatchHarmonyMethodUnity(typeof(ActionSelection), "ButtonPressed", "ButtonPressed", true, false);
             }
             catch (Exception ex)
             {
