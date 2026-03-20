@@ -8,6 +8,7 @@ using System;
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Net;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using UnityEngine;
@@ -15,14 +16,15 @@ using UnityEngine;
 
 namespace BitchlandGiveMuchMoneyBepInWx
 {
-    [BepInPlugin("com.wolfitdm.GiveMeMuchMoneyBitchlandBepInEx", "GiveMeMuchMoneyBitchlandBepInEx Plugin", "1.0.0.0")]
-    public class GiveMeMuchMoneyBitchlandBepInEx : BaseUnityPlugin
+    [BepInPlugin("com.wolfitdm.ManorMod", "ManorMod Plugin", "1.0.0.0")]
+    public class ManorMod : BaseUnityPlugin
     {
         internal static new ManualLogSource Logger;
+        private static ConfigEntry<bool> configNoCosts = null;
+        private static ConfigEntry<KeyCode> configKeyCodeR = null;
+        private static ConfigEntry<KeyCode> configKeyCodeS = null;
 
-        private ConfigEntry<bool> configEnableMe;
-
-        public GiveMeMuchMoneyBitchlandBepInEx()
+        public ManorMod()
         {
         }
 
@@ -33,120 +35,98 @@ namespace BitchlandGiveMuchMoneyBepInWx
 
         private static string pluginKey = "General.Toggles";
 
-        public static bool enableThisMod = false;
-
         private void Awake()
         {
             // Plugin startup logic
             Logger = base.Logger;
 
-            configEnableMe = Config.Bind(pluginKey,
-                                              "EnableThisMod",
-                                              true,
-                                             "Whether or not you want enable this mod (default true also yes, you want it, and false = no)");
+            configNoCosts = Config.Bind("General.Toggles",
+                                                         "ActionsNoCost",
+                                                          true,
+                                                         "Actions are free yes = true, false = no");
 
+            configKeyCodeR = Config.Bind("General.KeyControls",
+                                             "KeyCodeToGetUnlimitedPowerAndContribution",
+                                              KeyCode.R,
+                                             "KeyCodeToGetUnlimitedPowerAndContribution, default R");
 
-            enableThisMod = configEnableMe.Value;
+            configKeyCodeS = Config.Bind("General.KeyControls",
+                                 "KeyCodeToToggleActionsAreFree",
+                                  KeyCode.S,
+                                 "KeyCodeToToggleActionsAreFree, default S");
+
+            MagicCardNoCosts = configNoCosts.Value;
 
             PatchAllHarmonyMethods();
 
-            Logger.LogInfo($"Plugin GiveMeMuchMoneyForBitchLand BepInEx is loaded!");
+            Logger.LogInfo($"Plugin ManorMod BepInEx is loaded!");
         }
 
-        public static void BL_AddChatOption(string chattext, Action onOption)
+        private static bool MagicCardNoCosts = true;
+        private void OnGUI()
         {
-            UI_Gameplay _gameplay = Main.Instance.GameplayMenu;
-
-            bool foundChatOption = false;
-            for (int i = 0; i < _gameplay.ChatOptions.Length; i++)
+            if (Input.GetKeyUp(configKeyCodeR.Value))
             {
-                if (!_gameplay.ChatOptions[i].activeSelf)
+                foreach (GameState instance in GameStateInstance)
                 {
-                    foundChatOption = true;
-                    break;
+                    instance.contribution += 9000;
+                    instance.playerPower += 9000;
+
+                    Logger.LogInfo($"ContributionPower and player power 9000 added");
+                    Logger.LogInfo($"You see the changes in next turn");
                 }
             }
 
-            if (!foundChatOption)
+            if (Input.GetKeyUp(configKeyCodeS.Value))
             {
-                int oldLength = _gameplay.ChatOptions.Length;
-
-                string old_chattext = _gameplay.ChatOptions_text[oldLength - 1].text;
-
-                old_chattext = Regex.Replace(old_chattext, @"[0-9]+\s+.\s+", "");
-                Action old_chatcode = _gameplay.ChatOptions_code[oldLength - 1];
-
-
-                _gameplay.ChatOptions[oldLength - 1].SetActive(value: false);
-
-                _gameplay.AddChatOption("[Next options]", () =>
-                {
-                    _gameplay.RemoveAllChatOptions();
-                    _gameplay.AddChatOption(chattext, onOption);
-                    _gameplay.AddChatOption(old_chattext, old_chatcode);
-                    _gameplay.SelectChatOption(0);
-                    Main.Instance.MainThreads.Add(new Action(Main.Instance.GameplayMenu.OpenedChatOptionsThread));
-                });
-            }
-            else
-            {
-                _gameplay.AddChatOption(chattext, onOption);
+                configNoCosts.Value = MagicCardNoCosts = !MagicCardNoCosts;
+                Logger.LogInfo($"MagicCardNoCosts: {MagicCardNoCosts}");
             }
         }
-        public static void job_ArmyBuildingWork_Chat_ReceptionGuard(object __instance)
+
+        private static List<GameState> GameStateInstance = new List<GameState>();
+        public static void ConsumeContribution(int amount, object __instance)
         {
-            Logger.LogInfo("This method is called after the original method is called!");
-            if (!enableThisMod)
-            {
-                return;
+            GameState instance = (GameState)__instance;
+            if (!GameStateInstance.Contains(instance)) {
+                GameStateInstance.Add(instance);
             }
-
-            job_ArmyBuildingWork _this = (job_ArmyBuildingWork)__instance;
-            UI_Gameplay _gameplay = Main.Instance.GameplayMenu;
-            Person person = _gameplay.PersonChattingTo;
-            
-            BL_AddChatOption("Give Me 90 Mio Cash and add me 100 hunger", (Action)(() =>
-            {
-                Main.Instance.GameplayMenu.EnableMove();
-                Main.Instance.Player.Money += 90000000;
-                Main.Instance.Player.Hunger += 100;
-                _gameplay.DisplaySubtitle("Here money and hunger for you!", (AudioClip)null, new Action(person.ThisPersonInt.EndTheChat));
-            }));
-
-            return;
         }
-        public static void job_StripClub_StripChat(object __instance)
+
+        public static void ConsumePlayerPower(int amount, object __instance)
         {
-            Logger.LogInfo("This method is called after the original method is called!");
-            if (!enableThisMod)
+            GameState instance = (GameState)__instance;
+            if (!GameStateInstance.Contains(instance))
             {
-                return;
+                GameStateInstance.Add(instance);
             }
-
-            job_StripClub _this = (job_StripClub)__instance;
-            UI_Gameplay _gameplay = Main.Instance.GameplayMenu;
-            Person person = _gameplay.PersonChattingTo;
-            BL_AddChatOption("Give Me 90 Mio Cash and add me 100 hunger", (Action)(() =>
+        }
+        public static void CalculatePlayerPowerGain(object __instance)
+        {
+            GameState instance = (GameState)__instance;
+            if (!GameStateInstance.Contains(instance))
             {
-                Main.Instance.GameplayMenu.EnableMove();
-                Main.Instance.Player.Money += 90000000;
-                Main.Instance.Player.Hunger += 100;
-                _gameplay.DisplaySubtitle("Here money and hunger for you!", (AudioClip)null, new Action(person.ThisPersonInt.EndTheChat));
-            }));
-            return;
+                GameStateInstance.Add(instance);
+            }
         }
 
+        public static bool MasterMagicCostMultiplier(bool directMasterOrWitchAction, CharacterCard onTarget, bool awareMatters, ref float __result)
+        {
+            if (!MagicCardNoCosts)
+            {
+                return true;
+            }
+            __result = 0;
+            return false;
+        }
         public static void PatchAllHarmonyMethods()
         {
-            if (!enableThisMod)
-            {
-                return;
-            }
-
             try
             {
-                PatchHarmonyMethodUnity(typeof(job_ArmyBuildingWork), "Chat_ReceptionGuard", "job_ArmyBuildingWork_Chat_ReceptionGuard", false, true);
-                PatchHarmonyMethodUnity(typeof(job_StripClub), "StripChat", "job_StripClub_StripChat", false, true);
+                PatchHarmonyMethodUnity(typeof(GameState), "ConsumeContribution", "ConsumeContribution", false, true);
+                PatchHarmonyMethodUnity(typeof(GameState), "ConsumePlayerPower", "ConsumePlayerPower", false, true);
+                PatchHarmonyMethodUnity(typeof(GameState), "CalculatePlayerPowerGain", "CalculatePlayerPowerGain", false, true);
+                PatchHarmonyMethodUnity(typeof(CardInteractions), "MasterMagicCostMultiplier", "MasterMagicCostMultiplier", true, false);
             }
             catch (Exception ex)
             {
@@ -156,7 +136,7 @@ namespace BitchlandGiveMuchMoneyBepInWx
         public static void PatchHarmonyMethodUnity(Type originalClass, string originalMethodName, string patchedMethodName, bool usePrefix, bool usePostfix, Type[] parameters = null)
         {
             string uniqueId = "com.wolfitdm.GiveMeMuchMoneyBitchlandBepInEx";
-            Type uniqueType = typeof(GiveMeMuchMoneyBitchlandBepInEx);
+            Type uniqueType = typeof(ManorMod);
 
             // Create a new Harmony instance with a unique ID
             var harmony = new Harmony(uniqueId);
